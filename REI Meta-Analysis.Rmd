@@ -1,0 +1,438 @@
+---
+title: "REI Meta-Analysis"
+author: "Ryan Stanley Falck"
+date: "2022-12-21"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1) Loading packages for meta-analysis
+This step uses the r package "pacman" to load the packages which will be used throughout the analyses
+```{r}
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(readxl, plyr, robumeta,metafor,clubSandwich,tidyverse)
+detach("package:dplyr", unload = TRUE)
+```
+
+# 2) Importing data and preparing for analysis
+This step imports the data sheet and then prepares all data for the analysis
+```{r}
+meta_data <- read_excel("META-ANALYSIS-21-12-2021.xlsx")
+
+spaceless <- function(x) {colnames(x) <- gsub(" ", "_", colnames(x));x}
+meta_data_spaceless <- spaceless(meta_data)
+
+subset<-meta_data_spaceless[c(1:45)]
+
+
+subset.v2<-rename(subset,c("Parent_Study=1;_Secondary=2" = "Secondary_Study",
+                                        "Outcome_Type_Broad_Domain" = "Outcome_Domain",
+                                        "Expected_Direction_of_Change" = "Direction",
+                                        "Total_Sample_Size" = "Sample_Size",
+                                        "%Female" = "Female_pcnt",
+                                        "Mobility_Status_(Healthy,_Frail,_Mobility_Impaired,_Mixed)" = "Mobility_Status",
+                                        "Cognitive_Status_(Healthy,_Probable_MCI,_Neurological_Disease)" = "Cognitive_Status",
+                                        "Intervention_Mode__(REI;_RT)...15" = "INT_1_Mode",
+                                        "Intervention_Group_1_Size" = "INT_1_N",
+                                        "Intervention_Mode__(REI;_RT)...17" = "INT_2_Mode",
+                                        "Intervention\r\nGroup_2_Size" = "INT_2_N",
+                                        "Control_Group_(BAT;_Waitlist;_Health_Education;_Other)" = "CNT_Mode",
+                                        "Control_Group_Size" = "CNT_N",
+                                        "Intervention_Length__(weeks)" = "Duration",
+                                        "Intervention_Session_Duration__(min)" = "Session_Length",
+                                        "Intervention_REI_Duration_(reps)" = "REI_reps",
+                                        "Intervention_Exercise_Frequency__(days/week)" = "Session_Frequency",
+                                        "Intervention_Frequency__(REI_sets)" = "REI_sets",
+                                        "Intervention_Intensity_(Borg)" = "Intensity_borg",
+                                        "Intervention_Intensity_(Omni)" = "Intensity_Omni",
+                                        "Intervention_Intensity_(%RM)" = "Intensity_pcntRM",
+                                        "Supervision_(yes/no)" = "Supervision",
+                                        "Intervention_1_%Adherence" = "INT_1_Adherence",
+                                        "Intervention_2_%Adherence" = "INT_2_Adherence",
+                                        "Control_%Adherence" = "CNT_Adherence",
+                                        "Intervention_1_Mean_Baseline" = "INT_1_Baseline_Mean",
+                                        "Intervention_1_SD_Baseline" = "INT_1_Baseline_SD",
+                                        "Intervention_1_Mean_Follow-Up" = "INT_1_Final_Mean",
+                                        "Intervention_1_SD_Follow-up" = "INT_1_Final_SD",
+                                        "Intervention_2_Mean_Baseline" = "INT_2_Baseline_Mean",
+                                        "Intervention_2_SD_Baseline" = "INT_2_Baseline_SD",
+                                        "Intervention_2_Mean_Follow-Up" = "INT_2_Final_Mean",
+                                        "Intervention_2_SD_Follow-up" = "INT_2_Final_SD",
+                                        "Control_Mean_Baseline" = "CNT_Baseline_Mean",
+                                        "Control_SD_Baseline" = "CNT_Baseline_SD",
+                                        "Control_Mean_Follow-up" = "CNT_Final_Mean",
+                                        "Control_SD_Follow-up" = "CNT_Final_SD"))
+
+library(dplyr)
+subset.v3 <- subset.v2 %>%
+  mutate(
+    Secondary_Study = Secondary_Study - 1,
+    CNT_Mode = case_when(
+      CNT_Mode == "Stardard care" ~ "Usual Care",
+      CNT_Mode == "Lifestyle maintenance" ~ "Usual Care",
+      CNT_Mode == "Social and leisure activities" ~ "Active Control",
+      CNT_Mode == "M-SRT" ~ "Active Control",
+      CNT_Mode == "S-MRThip" ~ "Active Control",
+      CNT_Mode == "Healthy education" ~ "Active Control"
+    ),
+    INT_1_Mode = case_when(
+      INT_1_Mode == "F-URT" ~ "REI",
+      INT_1_Mode == "I-FRT" ~ "REI",
+      INT_1_Mode == "Suspension RT" ~ "REI",
+      INT_1_Mode == "REI" ~ "REI"
+    ),
+    INT_2_Mode = case_when(
+      INT_2_Mode == "M-URT" ~ "REI",
+      INT_2_Mode == "S-MRT" ~ "RE",
+      INT_2_Mode == "RE" ~ "RE",
+      INT_2_Mode == "RT" ~ "RE"
+    )
+  )
+
+
+subset.v4<- subset.v3[c(1:16,19:31,33:37,42:45)]
+subset.v4<-rename(subset.v4,c("INT_Mode" = "INT_1_Mode",
+                           "INT_N" = "INT_1_N",
+                           "INT_Adherence" = "INT_1_Adherence",
+                           "INT_Baseline_Mean" = "INT_1_Baseline_Mean",
+                           "INT_Baseline_SD" = "INT_1_Baseline_SD",
+                           "INT_Final_Mean" = "INT_1_Final_Mean",
+                           "INT_Final_SD" = "INT_1_Final_SD"))
+
+subset.v5<- subset.v3[c(1:14,17:30,32,33,38:45)]
+subset.v5<-rename(subset.v5,c("INT_Mode" = "INT_2_Mode",
+                              "INT_N" = "INT_2_N",
+                              "INT_Adherence" = "INT_2_Adherence",
+                              "INT_Baseline_Mean" = "INT_2_Baseline_Mean",
+                              "INT_Baseline_SD" = "INT_2_Baseline_SD",
+                              "INT_Final_Mean" = "INT_2_Final_Mean",
+                              "INT_Final_SD" = "INT_2_Final_SD"))
+
+subset.final<-rbind(subset.v4,subset.v5)
+subset.final<-subset(subset.final, !is.na(INT_Mode))
+
+subset.final <- subset.final %>%
+  mutate_at(c('INT_Baseline_Mean','INT_Final_Mean','INT_Baseline_SD','INT_Final_SD','CNT_Baseline_Mean','CNT_Final_Mean','CNT_Baseline_SD','CNT_Final_SD'), as.numeric)
+
+subset.final <- subset.final %>%
+  mutate(
+    SMD = ((INT_Final_Mean - INT_Baseline_Mean) - (CNT_Final_Mean - CNT_Baseline_Mean))/(sqrt((((INT_N - 1)*INT_Baseline_SD ^ 2) + ((CNT_N - 1)*CNT_Baseline_SD ^ 2))/(INT_N + CNT_N - 2))),
+    SMD_2 = ifelse(Direction == "positive", SMD, -SMD),
+    var.d = (((INT_N + CNT_N) / (INT_N * CNT_N)) + ((SMD_2^2) / (2*(INT_N + CNT_N)))),
+    J = 1 - (3 / (4 * (INT_N + CNT_N - 2) - 1)),
+    Hedge.g = SMD_2 * J,
+    var.g = J^2 * var.d,
+    se.g = sqrt(var.g /(INT_N + CNT_N)),
+    LL.g = Hedge.g - se.g*1.96,
+    UL.g = Hedge.g + se.g*1.96,
+    sesqrd.ES = se.g^2
+  )
+
+subset.final$Author_Year <-paste(subset.final$Author_Year, subset.final$Pub_Year)
+
+REI <- subset(subset.final, INT_Mode =="REI")
+RE <- subset(subset.final, INT_Mode == 'RE')
+
+REI.phys<-subset(REI, Outcome_Type =="Physical Function")
+REI.cog<-subset(REI, Outcome_Type =="Cognitive Function")
+REI.falls<-subset(REI, Outcome_Type =="Fall Risk")
+REI.QOL<-subset(REI, Outcome_Type =="Quality of Life")
+
+RE.phys<-subset(RE, Outcome_Type =="Physical Function")
+RE.cog<-subset(RE, Outcome_Type =="Cognitive Function")
+RE.falls<-subset(RE, Outcome_Type =="Fall Risk")
+RE.QOL<-subset(RE, Outcome_Type =="Quality of Life")
+```
+
+
+# 3) Meta-Analysis
+For this step, I've conducted meta-analyses on each of the outcomes of interest separately (i.e., physical function, cognitive function, falls risk, and quality of life). Each analysis is using robust varience estimation (RVE) in order to account for heterogeneity. While this can account for heterogeneity in effect sizes, it does not solve possible issues of heterogeneity entirely. 
+
+Physical Function (No significant effect. Note that heterogeneity for effect sizes is considered substantial, and this suggests that there might not be enough data to conduct a meta-analysis)
+```{r}
+REI.phys.intonly<-robu(Hedge.g~1,var=var.g,studynum=ID,REI.phys) #Clustered at level of overall study
+print(REI.phys.intonly)
+```
+
+Cognitive Function (Significant effect, however only 4 studies provided data)
+```{r}
+REI.cog.intonly<-robu(Hedge.g~1,var=var.g,studynum=ID,REI.cog) #Clustered at level of overall study
+print(REI.cog.intonly)
+```
+
+Falls Risk (No significant effect)
+```{r}
+REI.falls.intonly<-robu(Hedge.g~1,var=var.g,studynum=ID,REI.falls) #Clustered at level of overall study
+print(REI.falls.intonly)
+```
+
+Quality of Life (No significant effect)
+```{r}
+REI.QoL.intonly<-robu(Hedge.g~1,var=var.g,studynum=ID,REI.QOL) #Clustered at level of overall study
+print(REI.QoL.intonly)
+```
+
+# 4) Sensitivity Analyses
+
+I've also conducted sensitivity analyses for the meta-effects shown. The sensitivity analyses examine whether the effects estimated differ based on the correlation between effect sizes of th same study (i.e., if there is high correlation, then for Study A all effect sizes are large; for Study B, all effect sizes are small, etc.). The results for each of these do not suggest that the correlation between effect sizes substantially altered the meta-effects estimated.
+
+
+Physical Function Sensitivity Analysis
+```{r}
+sensitivity(REI.phys.intonly)
+```
+
+Cognitive Function Sensitivity Analysis
+```{r}
+sensitivity(REI.cog.intonly)
+```
+
+Falls Risk Sensitivity Analysis
+```{r}
+sensitivity(REI.falls.intonly)
+```
+
+Quality of Life Sensitivity Analysis
+```{r}
+sensitivity(REI.QoL.intonly)
+```
+
+
+# 5) Forest Plots
+Here is the code for the forest plots. I have attached each of the graphs separately so that you can review in detail.
+
+Physical Function
+```{r}
+forest.REI.phys<-subset(REI.phys, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.phys<-forest.REI.phys[order(forest.REI.phys$ID),]
+Overall.effect <-c(NA, "Overall Effect", 0.580, 0.328, 0.833)
+forest.REI.phys<-rbind(forest.REI.phys,Overall.effect)
+forest.REI.phys$ES<- rev(c(1:105))
+forest.REI.phys <- forest.REI.phys %>%
+  mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
+
+forest.REI.phys.plot <- ggplot(forest.REI.phys, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.phys)), labels=forest.REI.phys$Author_Year) +
+  scale_x_continuous(name="Hedge's g Effect Size", limits = c(-3,3), breaks = c(-3, 0, 3)) + 
+  labs(title="Physical Function Forest Plot") + 
+  geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
+```
+
+Cognitive Function
+```{r}
+forest.REI.cog<-subset(REI.cog, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.cog<-forest.REI.cog[order(forest.REI.cog$ID),]
+Overall.effect <-c(NA, "Overall Effect", 0.508, 0.0137, 1.000)
+forest.REI.cog<-rbind(forest.REI.cog,Overall.effect)
+forest.REI.cog$ES<- rev(c(1:27))
+forest.REI.cog <- forest.REI.cog %>%
+  mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
+
+forest.REI.cog.plot <- ggplot(forest.REI.cog, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.cog)), labels=forest.REI.cog$Author_Year) +
+  scale_x_continuous(name="Hedge's g Effect Size", limits = c(-3,3), breaks = c(-3, 0, 3)) + 
+  labs(title="Cognitive Function Forest Plot") + 
+  geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
+```
+
+Falls Risk
+```{r}
+forest.REI.falls<-subset(REI.falls, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.falls<-forest.REI.falls[order(forest.REI.falls$ID),]
+Overall.effect <-c(NA, "Overall Effect", 0.448, -0.184, 1.080)
+forest.REI.falls<-rbind(forest.REI.falls,Overall.effect)
+forest.REI.falls$ES<- rev(c(1:5))
+forest.REI.falls <- forest.REI.falls %>%
+  mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
+
+forest.REI.falls.plot <- ggplot(forest.REI.falls, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.falls)), labels=forest.REI.falls$Author_Year) +
+  scale_x_continuous(name="Hedge's g Effect Size", limits = c(-1,1), breaks = c(-1, 0, 1)) + 
+  labs(title="Falls Risk Forest Plot") + 
+  geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
+```
+
+Quality of Life
+```{r}
+forest.REI.QOL<-subset(REI.QOL, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.QOL<-forest.REI.QOL[order(forest.REI.falls$ID),]
+Overall.effect <-c(NA, "Overall Effect", 0.919, -0.263, 2.100)
+forest.REI.QOL<-rbind(forest.REI.QOL,Overall.effect)
+forest.REI.QOL<- forest.REI.QOL[-c(4,5),]
+forest.REI.QOL$ES<- rev(c(1:4))
+forest.REI.QOL <- forest.REI.QOL %>%
+  mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
+
+forest.REI.QOL.plot <- ggplot(forest.REI.QOL, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.QOL)), labels=forest.REI.QOL$Author_Year) +
+  scale_x_continuous(name="Hedge's g Effect Size", limits = c(-3,3), breaks = c(-3, 0, 3)) + 
+  labs(title="Quality of Life Forest Plot") + 
+  geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
+```
+
+# 6) Leave-One-Out Analysis
+This analysis examines the  extent that individual effect sizes influence the summary effect size and significance of the effect. I conducted a separate one for each outcome of interest.
+
+Leave-one-out function
+```{r}
+leave.one.out <- function(rownum){
+  
+  # subset dataframe
+  vec <- rep(TRUE, nrow(REI.phys))
+  vec[rownum] <- FALSE
+  inf <- subset(REI.phys, vec)
+  
+  # fit reference model
+  rve.model.ref <- robu(Hedge.g~1,var=var.g,studynum=ID, data = REI.phys)
+  
+  # fit adjusted model
+  rve.model <- robu(Hedge.g~1,var=var.g,studynum=ID, data = inf)
+  
+  # return results
+  results.vec <- c(g.study = round(REI.phys$Hedge.g[rownum], 3),
+                   g.adj = round(rve.model$reg_table$b.r, 3),
+                   se.g.adj = round(rve.model$reg_table$SE, 3),
+                   p.adj = round(rve.model$reg_table$prob, 5),
+                   diff.g = round(rve.model$reg_table$b.r - rve.model.ref$reg_table$b.r, 3),
+                   diff.se.g = round(rve.model$reg_table$SE - rve.model.ref$reg_table$SE, 3),
+                   diff.p = round(rve.model$reg_table$prob - rve.model.ref$reg_table$prob, 5),
+                   diff.isq = round(rve.model$mod_info$I.2 - rve.model.ref$mod_info$I.2, 3))
+  return(results.vec)
+}
+```
+
+Physical Function
+```{r}
+inf.phys <- sapply(1:nrow(REI.phys), leave.one.out)
+inf.phys <- data.frame(t(inf.phys))
+inf.phys <- data.frame(label = paste(REI.phys$Author_Year, REI.phys$Outcome, sep = " / "),
+                       inf.phys)
+inf.phys$z.g.study <- round(scale(inf.phys$g.study), 2)
+inf.phys$g.min.sumeff.div.sdg <- round((REI.phys$Hedge.g - REI.phys.intonly$reg_table$b.r) / sd(REI.phys$Hedge.g), 2)
+
+inf.phys
+```
+
+Cognitive Function
+```{r}
+inf.cog <- sapply(1:nrow(REI.cog), leave.one.out)
+inf.cog <- data.frame(t(inf.cog))
+inf.cog <- data.frame(label = paste(REI.cog$Author_Year, REI.cog$Outcome, sep = " / "),
+                      inf.cog)
+inf.cog$z.g.study <- round(scale(inf.cog$g.study), 2)
+inf.cog$g.min.sumeff.div.sdg <- round((REI.cog$Hedge.g - REI.cog.intonly$reg_table$b.r) / sd(REI.cog$Hedge.g), 2)
+
+inf.cog
+```
+
+Falls Risk
+```{r}
+inf.falls <- sapply(1:nrow(REI.falls), leave.one.out)
+inf.falls <- data.frame(t(inf.falls))
+inf.falls <- data.frame(label = paste(REI.falls$Author_Year, REI.falls$Outcome, sep = " / "),
+                        inf.falls)
+inf.falls$z.g.study <- round(scale(inf.falls$g.study), 2)
+inf.falls$g.min.sumeff.div.sdg <- round((REI.falls$Hedge.g - REI.falls.intonly$reg_table$b.r) / sd(REI.falls$Hedge.g), 2)
+
+inf.falls
+```
+
+Quality of Life
+```{r}
+inf.QOL <- sapply(1:nrow(REI.QOL), leave.one.out)
+inf.QOL <- data.frame(t(inf.QOL))
+inf.QOL <- data.frame(label = paste(REI.QOL$Author_Year, REI.QOL$Outcome, sep = " / "),
+                      inf.QOL)
+inf.QOL$z.g.study <- round(scale(inf.QOL$g.study), 2)
+inf.QOL$g.min.sumeff.div.sdg <- round((REI.QOL$Hedge.g - REI.QoL.intonly$reg_table$b.r) / sd(REI.QOL$Hedge.g), 2)
+
+inf.QOL
+```
+
+
+# 7) Egger's regression test for dependent effect sizes
+This test looks at the exent to which the summary effects are dependent upon the standard errors (i.e., does a larger standard error predict a larger effect size, or vice-versa?). If significant, it suggests that there is bias in the summary effect size which is dependent on standard error. There were no significant effects for any of the 4 outcomes.
+
+Physical Function
+```{r}
+REI.phys.rve <- robu(Hedge.g~se.g, var.eff.size = var.g, studynum = ID, data = REI.phys)
+print(REI.phys.rve)
+```
+
+Cognitive Function
+```{r}
+REI.cog.rve <- robu(Hedge.g~se.g, var.eff.size = var.g, studynum = ID, data = REI.cog)
+print(REI.cog.rve)
+```
+
+Falls Risk
+```{r}
+REI.falls.rve <- robu(Hedge.g~se.g, var.eff.size = var.g, studynum = ID, data = REI.falls)
+print(REI.falls.rve)
+```
+
+Quality of Life
+```{r}
+REI.QOL.rve <- robu(Hedge.g~se.g, var.eff.size = var.g, studynum = ID, data = REI.QOL)
+print(REI.QOL.rve)
+```
+
+# 8) Funnel plots
+
+Physical Function
+```{r}
+meta.res.REI.phys<-rma.mv(yi=Hedge.g,V=var.g,data=REI.phys,slab=Author_Year)
+funnel(meta.res.REI.phys, xlab = "Hedge's g for physical function")
+```
+
+Cognitive Function
+```{r}
+meta.res.REI.cog<-rma.mv(yi=Hedge.g,V=var.g,data=REI.cog,slab=Author_Year)
+funnel(meta.res.REI.cog, xlab = "Hedge's g for cognitive function")
+```
+
+Falls Risk
+```{r}
+meta.res.REI.falls<-rma.mv(yi=Hedge.g,V=var.g,data=REI.falls,slab=Author_Year)
+funnel(meta.res.REI.falls, xlab = "Hedge's g for falls risk")
+```
+
+Quality of Life
+```{r}
+meta.res.REI.QOL<-rma.mv(yi=Hedge.g,V=var.g,data=REI.QOL,slab=Author_Year)
+funnel(meta.res.REI.QOL, xlab = "Hedge's g for QOL")
+```
+
+
+# 9) Precision Effect Estimation with Standard Error
+From this regressio, test, we use the intercept as means of representing the true, unbiased effect size. If it is considerably smaller or larger than what was reported for the summary effect, then we can assume there is some bias in the true effect size which is dependent on the variance in the standard error. Notably, the intercept was considerably smaller for each of the effect sizes we estimated, suggesting that there is some pretty large amount of bias in the estimated summary effect.
+
+Physical Function
+```{r}
+peese.rve.costs <- robu(Hedge.g~sesqrd.ES, var.eff.size = var.g, studynum = ID, data = REI.phys)
+print(peese.rve.costs)
+```
+
+Cognitive Function
+```{r}
+peese.rve.costs <- robu(Hedge.g~sesqrd.ES, var.eff.size = var.g, studynum = ID, data = REI.cog)
+print(peese.rve.costs)
+```
+
+Falls Risk
+```{r}
+peese.rve.costs <- robu(Hedge.g~sesqrd.ES, var.eff.size = var.g, studynum = ID, data = REI.falls)
+print(peese.rve.costs)
+```
+
+Quality of Life
+```{r}
+peese.rve.costs <- robu(Hedge.g~sesqrd.ES, var.eff.size = var.g, studynum = ID, data = REI.QOL)
+print(peese.rve.costs)
+```
