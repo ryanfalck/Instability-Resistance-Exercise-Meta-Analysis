@@ -1,7 +1,7 @@
 ---
 title: "REI Meta-Analysis"
 author: "Ryan Stanley Falck"
-date: "2022-12-21"
+date: "2023-01-24"
 output: 
   html_document:
     toc: true
@@ -23,7 +23,7 @@ detach("package:dplyr", unload = TRUE)
 # 2) Importing data and preparing for analysis
 This step imports the data sheet and then prepares all data for the analysis
 ```{r}
-meta_data <- read_excel("META-ANALYSIS-21-12-2021.xlsx")
+meta_data <- read_excel("META-ANALYSIS-23-January-2023.xlsx")
 
 spaceless <- function(x) {colnames(x) <- gsub(" ", "_", colnames(x));x}
 meta_data_spaceless <- spaceless(meta_data)
@@ -122,6 +122,7 @@ subset.final <- subset.final %>%
 
 subset.final <- subset.final %>%
   mutate(
+    INT_N = as.numeric(INT_N),
     SMD = ((INT_Final_Mean - INT_Baseline_Mean) - (CNT_Final_Mean - CNT_Baseline_Mean))/(sqrt((((INT_N - 1)*INT_Baseline_SD ^ 2) + ((CNT_N - 1)*CNT_Baseline_SD ^ 2))/(INT_N + CNT_N - 2))),
     SMD_2 = ifelse(Direction == "positive", SMD, -SMD),
     var.d = (((INT_N + CNT_N) / (INT_N * CNT_N)) + ((SMD_2^2) / (2*(INT_N + CNT_N)))),
@@ -134,7 +135,7 @@ subset.final <- subset.final %>%
     sesqrd.ES = se.g^2
   )
 
-subset.final$Author_Year <-paste(subset.final$Author_Year, subset.final$Pub_Year)
+subset.final$Forest_Author_Year <-paste(subset.final$Study, subset.final$Pub_Year)
 
 REI <- subset(subset.final, INT_Mode =="REI")
 RE <- subset(subset.final, INT_Mode == 'RE')
@@ -209,16 +210,16 @@ Here is the code for the forest plots. I have attached each of the graphs separa
 
 Physical Function
 ```{r}
-forest.REI.phys<-subset(REI.phys, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.phys<-subset(REI.phys, select = c(ID,Forest_Author_Year,Hedge.g,LL.g,UL.g))
 forest.REI.phys<-forest.REI.phys[order(forest.REI.phys$ID),]
-Overall.effect <-c(NA, "Overall Effect", 0.580, 0.328, 0.833)
+Overall.effect <-c(NA, "Overall Effect", 0.610, 0.350, 0.860)
 forest.REI.phys<-rbind(forest.REI.phys,Overall.effect)
 forest.REI.phys$ES<- rev(c(1:105))
 forest.REI.phys <- forest.REI.phys %>%
   mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
 
 forest.REI.phys.plot <- ggplot(forest.REI.phys, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
-  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.phys)), labels=forest.REI.phys$Author_Year) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.phys)), labels=forest.REI.phys$Forest_Author_Year) +
   scale_x_continuous(name="Hedge's g Effect Size", limits = c(-3,3), breaks = c(-3, 0, 3)) + 
   labs(title="Physical Function Forest Plot") + 
   geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
@@ -226,16 +227,16 @@ forest.REI.phys.plot <- ggplot(forest.REI.phys, aes(y= ES, x = Hedge.g, xmin = L
 
 Cognitive Function
 ```{r}
-forest.REI.cog<-subset(REI.cog, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.cog<-subset(REI.cog, select = c(ID,Forest_Author_Year,Hedge.g,LL.g,UL.g))
 forest.REI.cog<-forest.REI.cog[order(forest.REI.cog$ID),]
-Overall.effect <-c(NA, "Overall Effect", 0.508, 0.0137, 1.000)
+Overall.effect <-c(NA, "Overall Effect", 0.670, 0.080, 1.270)
 forest.REI.cog<-rbind(forest.REI.cog,Overall.effect)
 forest.REI.cog$ES<- rev(c(1:27))
 forest.REI.cog <- forest.REI.cog %>%
   mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
 
 forest.REI.cog.plot <- ggplot(forest.REI.cog, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
-  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.cog)), labels=forest.REI.cog$Author_Year) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.cog)), labels=forest.REI.cog$Forest_Author_Year) +
   scale_x_continuous(name="Hedge's g Effect Size", limits = c(-3,3), breaks = c(-3, 0, 3)) + 
   labs(title="Cognitive Function Forest Plot") + 
   geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
@@ -243,16 +244,16 @@ forest.REI.cog.plot <- ggplot(forest.REI.cog, aes(y= ES, x = Hedge.g, xmin = LL.
 
 Falls Risk
 ```{r}
-forest.REI.falls<-subset(REI.falls, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.falls<-subset(REI.falls, select = c(ID,Forest_Author_Year,Hedge.g,LL.g,UL.g))
 forest.REI.falls<-forest.REI.falls[order(forest.REI.falls$ID),]
-Overall.effect <-c(NA, "Overall Effect", 0.448, -0.184, 1.080)
+Overall.effect <-c(NA, "Overall Effect", 0.290, -0.320, 0.900)
 forest.REI.falls<-rbind(forest.REI.falls,Overall.effect)
-forest.REI.falls$ES<- rev(c(1:5))
+forest.REI.falls$ES<- rev(c(1:6))
 forest.REI.falls <- forest.REI.falls %>%
   mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
 
 forest.REI.falls.plot <- ggplot(forest.REI.falls, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
-  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.falls)), labels=forest.REI.falls$Author_Year) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.falls)), labels=forest.REI.falls$Forest_Author_Year) +
   scale_x_continuous(name="Hedge's g Effect Size", limits = c(-1,1), breaks = c(-1, 0, 1)) + 
   labs(title="Falls Risk Forest Plot") + 
   geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
@@ -260,17 +261,17 @@ forest.REI.falls.plot <- ggplot(forest.REI.falls, aes(y= ES, x = Hedge.g, xmin =
 
 Quality of Life
 ```{r}
-forest.REI.QOL<-subset(REI.QOL, select = c(ID,Author_Year,Hedge.g,LL.g,UL.g))
+forest.REI.QOL<-subset(REI.QOL, select = c(ID,Forest_Author_Year,Hedge.g,LL.g,UL.g))
 forest.REI.QOL<-forest.REI.QOL[order(forest.REI.falls$ID),]
-Overall.effect <-c(NA, "Overall Effect", 0.919, -0.263, 2.100)
+Overall.effect <-c(NA, "Overall Effect", 0.920, -0.260, 2.100)
 forest.REI.QOL<-rbind(forest.REI.QOL,Overall.effect)
-forest.REI.QOL<- forest.REI.QOL[-c(4,5),]
+forest.REI.QOL<- forest.REI.QOL[-c(1,5,6),]
 forest.REI.QOL$ES<- rev(c(1:4))
 forest.REI.QOL <- forest.REI.QOL %>%
   mutate_at(c('Hedge.g','LL.g','UL.g'), as.numeric)
 
 forest.REI.QOL.plot <- ggplot(forest.REI.QOL, aes(y= ES, x = Hedge.g, xmin = LL.g, xmax= UL.g)) + geom_point() + geom_errorbarh(height=.1) +
-  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.QOL)), labels=forest.REI.QOL$Author_Year) +
+  scale_y_continuous(name= "Author & Year", breaks=rev(1:nrow(forest.REI.QOL)), labels=forest.REI.QOL$Forest_Author_Year) +
   scale_x_continuous(name="Hedge's g Effect Size", limits = c(-3,3), breaks = c(-3, 0, 3)) + 
   labs(title="Quality of Life Forest Plot") + 
   geom_vline(xintercept=0, color="black", linetype="dashed", alpha=.5) + theme_classic()
